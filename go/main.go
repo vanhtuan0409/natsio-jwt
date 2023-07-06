@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/nats-io/jwt/v2"
@@ -13,7 +15,7 @@ import (
 const (
 	NatServer = "nats://127.0.0.1:4222"
 	// NatServer = "nats://nats.gondor.svc.kube:4222"
-	Subject    = "time"
+	Subject    = "client.time"
 	AccountKey = "/home/tuan/.local/share/nats/nsc/keys/keys/A/AC/AACTO6KATGZMTM7F6MCRBA6CK7O5VNLBOOKY5BCDTQFUK6PSO6APRICH.nk"
 )
 
@@ -22,7 +24,38 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	userJwt, userSeed, err := generateJwt(accountKP, "gondor", AdminPermission())
+
+	mux := http.NewServeMux()
+	sessionPrefix := "/session/"
+	mux.Handle(
+		sessionPrefix,
+		http.StripPrefix(sessionPrefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+
+			userId := strings.TrimSpace(r.URL.Path)
+			userJwt, userSeed, err := generateJwt(accountKP, userId, UserPermission(userId))
+			if err != nil {
+				handleServerError(w, err)
+				return
+			}
+
+			creds, err := jwt.FormatUserConfig(userJwt, []byte(userSeed))
+			if err != nil {
+				handleServerError(w, err)
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
+			w.Write(creds)
+		})),
+	)
+	go func() {
+		fmt.Println("Starting api server")
+		http.ListenAndServe(":8833", mux)
+	}()
+
+	serverJwt, serverSeed, err := generateJwt(accountKP, "gondor", AdminPermission())
 	if err != nil {
 		panic(err)
 	}
@@ -30,7 +63,7 @@ func main() {
 	nc, err := nats.Connect(
 		NatServer,
 		nats.Name("server"),
-		nats.UserJWTAndSeed(userJwt, userSeed),
+		nats.UserJWTAndSeed(serverJwt, serverSeed),
 	)
 	if err != nil {
 		panic(err)
@@ -78,4 +111,9 @@ func generateJwt(accountKP nkeys.KeyPair, subject string, pf PermissionFunc) (st
 		return "", "", err
 	}
 	return userJwt, string(userSeed), nil
+}
+
+func handleServerError(w http.ResponseWriter, err error) {
+	w.WriteHeader(http.StatusInternalServerError)
+	fmt.Fprintf(w, "ERR: %s", err)
 }
