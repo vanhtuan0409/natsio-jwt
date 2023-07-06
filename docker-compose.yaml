@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  nats:
+    image: nats:2.9.19-alpine
+    command:
+      - -c
+      - /opt/configs/server.conf
+    ports:
+      - 4222:4222
+      - 5222:5222
+      - 8222:8222
+    volumes:
+      - ./configs:/opt/configs

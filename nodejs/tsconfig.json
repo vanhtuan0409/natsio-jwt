@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "target": "ES2015",
+    "module": "commonjs"
+  },
+  "compileOnSave": true,
+  "exclude": ["node_modules"]
+}
