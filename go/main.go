@@ -14,7 +14,6 @@ const (
 )
 
 func main() {
-	nats.NkeyOptionFromSeed()
 	nc, err := nats.Connect(NatServer)
 	if err != nil {
 		panic(err)
